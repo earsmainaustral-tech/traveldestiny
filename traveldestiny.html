@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Travel Destiny</title> <!-- Título de la app cambiado a Travel Destiny -->
+    <!-- Tailwind CSS para un diseño moderno y adaptable -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tone.js para generar el sonido de la alarma -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <style>
+        /* Estilo para asegurar que el mapa ocupe todo el espacio disponible */
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; /* Evita el scroll global del body, ajustado para el layout de la app */
+        }
+        /* Estilos para el panel de control flotante */
+        .controls-panel {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 5;
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 1rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 95%;
+            max-width: 500px;
+            box-sizing: border-box; /* Incluye padding y borde en el ancho total */
+            transition: max-height 0.3s ease-out, padding 0.3s ease-out; /* Smooth transitions */
+            max-height: 600px; /* Initial max height to show all content */
+        }
+        .controls-panel.collapsed {
+            max-height: 60px; /* Suficiente para mostrar el título y el botón de alternar */
+            padding-bottom: 0.5rem;
+        }
+        .controls-panel .content-wrapper {
+            opacity: 1;
+            pointer-events: auto;
+            overflow: visible;
+            height: auto;
+            transition: opacity 0.3s ease-out, height 0.3s ease-out;
+        }
+        .controls-panel.collapsed .content-wrapper {
+            opacity: 0;
+            pointer-events: none; /* Deshabilita interacciones cuando está colapsado */
+            height: 0; /* Colapsa el contenido */
+            overflow: hidden;
+        }
+        /* Estilos para el panel de estado flotante */
+        .status-panel {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 5;
+            background-color: rgba(30, 41, 59, 0.9);
+            color: white;
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 95%;
+            max-width: 500px;
+            text-align: center;
+            font-weight: 500;
+            box-sizing: border-box;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #14b8a6; /* Color calipso (teal-500) */
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 0.5rem;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-100">
+
+    <!-- Contenedor principal del mapa -->
+    <div id="map"></div>
+
+    <!-- Panel de control para ingresar destino y distancia -->
+    <div class="controls-panel" id="controls-panel">
+        <div class="absolute top-2 right-2 z-10">
+            <button id="toggle-panel-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs px-2 py-1 rounded-full shadow">
+                Contraer
+            </button>
+        </div>
+        <h1 class="text-xl font-bold text-teal-700 mb-2 text-center">Travel Destiny</h1> <!-- Nombre de la app cambiado -->
+        <div id="panel-content-wrapper" class="content-wrapper space-y-4">
+            <div>
+                <label for="start-location-input" class="block text-sm font-medium text-gray-700">Punto de partida:</label>
+                <input type="text" id="start-location-input" placeholder="Tu ubicación actual o una dirección" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-teal-500 focus:border-teal-500 sm:text-sm">
+                <div class="flex space-x-2 mt-2">
+                    <button id="use-current-location-btn" class="w-1/2 bg-teal-500 hover:bg-teal-600 text-white text-sm font-semibold py-1.5 px-3 rounded-md transition duration-300 ease-in-out transform hover:scale-105">
+                        Usar mi ubicación actual
+                    </button>
+                    <button id="select-origin-on-map-btn" class="w-1/2 bg-teal-500 hover:bg-teal-600 text-white text-sm font-semibold py-1.5 px-3 rounded-md transition duration-300 ease-in-out transform hover:scale-105">
+                        Seleccionar en mapa (Partida)
+                    </button>
+                </div>
+            </div>
+            <div>
+                <label for="destination-input" class="block text-sm font-medium text-gray-700">Destino:</label>
+                <input type="text" id="destination-input" placeholder="Escribe una dirección o haz clic en el mapa" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-teal-500 focus:border-teal-500 sm:text-sm">
+                <button id="select-destination-on-map-btn" class="mt-2 w-full bg-teal-500 hover:bg-teal-600 text-white text-sm font-semibold py-1.5 px-3 rounded-md transition duration-300 ease-in-out transform hover:scale-105">
+                    Seleccionar en mapa (Destino)
+                </button>
+            </div>
+            <div>
+                <label for="distance-input" class="block text-sm font-medium text-gray-700">Avisar a (km):</label>
+                <input type="number" id="distance-input" value="1" min="0.1" step="0.1" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 sm:text-sm">
+            </div>
+            <button id="set-alarm-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md transition duration-300 ease-in-out shadow-lg transform hover:scale-105">
+                Activar Alarma
+            </button>
+        </div>
+    </div>
+
+    <!-- Panel para mostrar el estado y la distancia restante -->
+    <div id="status-panel" class="status-panel hidden">
+        <p id="status-text">Esperando destino...</p>
+        <p id="route-distance-text" class="text-sm mt-1"></p> <!-- Nueva línea para la distancia de ruta -->
+        <div id="loading-indicator" class="mt-2 text-sm hidden">
+            <span class="loading-spinner"></span> Cargando...
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        let map;
+        let userMarker; // Marca la ubicación actual del usuario
+        let originMarker; // Marca el punto de partida si es diferente de userMarker
+        let destinationMarker; // Marca el destino
+        let geocoder;
+        let directionsService; // Para la API de Directions
+        let directionsRenderer; // Para renderizar la ruta
+        let startLocation = null; // Coordenadas LatLng del punto de partida de la ruta (puede ser diferente de userMarker)
+        let destinationLocation = null; // Coordenadas LatLng del destino
+        let alarmDistanceKm = 0;
+        let alarmTriggered = false;
+        let watchId; // ID para el seguimiento de la geolocalización
+        let mapSelectionMode = null; // 'origin' o 'destination' - para clicks en el mapa
+
+        // Sintetizador para el sonido de la alarma con Tone.js
+        let alarmSynth;
+
+        const startLocationInput = document.getElementById('start-location-input');
+        const useCurrentLocationBtn = document.getElementById('use-current-location-btn');
+        const selectOriginOnMapBtn = document.getElementById('select-origin-on-map-btn');
+        const destinationInput = document.getElementById('destination-input');
+        const selectDestinationOnMapBtn = document.getElementById('select-destination-on-map-btn');
+        const distanceInput = document.getElementById('distance-input');
+        const setAlarmBtn = document.getElementById('set-alarm-btn');
+        const controlsPanel = document.getElementById('controls-panel'); // Panel de controles
+        const togglePanelBtn = document.getElementById('toggle-panel-btn'); // Botón para contraer/expandir
+        const panelContentWrapper = document.getElementById('panel-content-wrapper'); // Contenedor del contenido del panel
+        const statusPanel = document.getElementById('status-panel');
+        const statusText = document.getElementById('status-text');
+        const routeDistanceText = document.getElementById('route-distance-text');
+        const loadingIndicator = document.getElementById('loading-indicator');
+
+        /**
+         * Función para contraer el panel de control.
+         */
+        function collapsePanel() {
+            controlsPanel.classList.add('collapsed');
+            togglePanelBtn.textContent = 'Expandir';
+        }
+
+        /**
+         * Función para expandir el panel de control.
+         */
+        function expandPanel() {
+            controlsPanel.classList.remove('collapsed');
+            togglePanelBtn.textContent = 'Contraer';
+        }
+
+        /**
+         * Función principal que inicializa el mapa y la geolocalización.
+         * Esta función es llamada por el script de la API de Google Maps una vez que se ha cargado.
+         */
+        function initMap() {
+            // Coordenadas iniciales (se actualizarán con la ubicación del usuario)
+            const initialPosition = { lat: -33.4489, lng: -70.6693 }; // Santiago, Chile (usado como valor por defecto)
+
+            // Creación del mapa
+            map = new google.maps.Map(document.getElementById("map"), {
+                zoom: 12, // Zoom inicial
+                center: initialPosition,
+                mapTypeControl: false,
+                streetViewControl: false,
+                fullscreenControl: false,
+                styles: [ // Estilo de mapa personalizado para un look más limpio
+                    { elementType: "geometry", stylers: [{ color: "#f5f5f5" }] },
+                    { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+                    { elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
+                    { elementType: "labels.text.stroke", stylers: [{ color: "#f5f5f5" }] },
+                    { featureType: "administrative.land_parcel", stylers: [{ visibility: "off" }] },
+                    { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#bdbdbd" }] },
+                    { featureType: "poi", elementType: "geometry", stylers: [{ color: "#eeeeee" }] },
+                    { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
+                    { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#e5e5e5" }] },
+                    { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
+                    { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
+                    { featureType: "road.arterial", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
+                    { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#dadada" }] },
+                    { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
+                    { featureType: "road.local", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
+                    { featureType: "transit.line", elementType: "geometry", stylers: [{ color: "#e5e5e5" }] },
+                    { featureType: "transit.station", elementType: "geometry", stylers: [{ color: "#eeeeee" }] },
+                    { featureType: "water", elementType: "geometry", stylers: [{ color: "#c9c9c9" }] },
+                    { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
+                ],
+            });
+
+            geocoder = new google.maps.Geocoder();
+            directionsService = new google.maps.DirectionsService();
+            directionsRenderer = new google.maps.DirectionsRenderer({
+                map: map,
+                polylineOptions: {
+                    strokeColor: '#00BCD4', // Color calipso para la ruta (Cyan 500)
+                    strokeOpacity: 0.8,
+                    strokeWeight: 6
+                },
+                suppressMarkers: true // Evita que el renderizador de direcciones ponga sus propios marcadores
+            });
+
+            // Configurar el marcador del usuario
+            userMarker = new google.maps.Marker({
+                map: map,
+                title: "Tu ubicación actual",
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 8,
+                    fillColor: "#00BCD4", // Color calipso para el marcador de usuario
+                    fillOpacity: 1,
+                    strokeColor: "white",
+                    strokeWeight: 2,
+                },
+            });
+
+            // Iniciar el seguimiento de la ubicación del usuario
+            startGeolocation();
+
+            // Añadir listener para clics en el mapa para seleccionar puntos
+            map.addListener('click', (e) => {
+                handleMapClick(e.latLng);
+            });
+
+            // Añadir listeners a los botones y campos de entrada
+            setAlarmBtn.addEventListener("click", setAlarm);
+            useCurrentLocationBtn.addEventListener("click", populateStartWithCurrentLocation);
+            selectOriginOnMapBtn.addEventListener("click", () => {
+                mapSelectionMode = 'origin';
+                updateStatus('Haz clic en el mapa para seleccionar el PUNTO DE PARTIDA.');
+                collapsePanel(); // Colapsar el panel al activar selección en mapa
+            });
+            selectDestinationOnMapBtn.addEventListener("click", () => {
+                mapSelectionMode = 'destination';
+                updateStatus('Haz clic en el mapa para seleccionar el DESTINO.');
+                collapsePanel(); // Colapsar el panel al activar selección en mapa
+            });
+
+            // Event listener para el botón de contraer/expandir el panel
+            togglePanelBtn.addEventListener("click", () => {
+                controlsPanel.classList.toggle('collapsed');
+                if (controlsPanel.classList.contains('collapsed')) {
+                    togglePanelBtn.textContent = 'Expandir';
+                } else {
+                    togglePanelBtn.textContent = 'Contraer';
+                }
+            });
+
+            // Inicializar Tone.js al interactuar por primera vez con la página
+            document.body.addEventListener('click', () => {
+                if (!alarmSynth) { // Asegura que el sintetizador solo se cree una vez
+                    alarmSynth = new Tone.Synth().toDestination();
+                }
+                // También puedes iniciar el contexto de audio aquí si Tone.js lo requiere explícitamente y no lo hace al crear el sintetizador
+                // if (Tone.context.state !== 'running') {
+                //    Tone.start();
+                // }
+            }, { once: true }); // El evento se dispara solo una vez
+        }
+
+        /**
+         * Inicia el seguimiento de la geolocalización del dispositivo.
+         */
+        function startGeolocation() {
+            updateStatus('Obteniendo tu ubicación actual...');
+            statusPanel.classList.remove('hidden');
+
+            if (navigator.geolocation) {
+                // watchPosition actualiza la ubicación continuamente
+                watchId = navigator.geolocation.watchPosition(
+                    (position) => {
+                        const userPos = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude,
+                        };
+                        
+                        userMarker.setPosition(userPos); // Actualiza la posición del marcador del usuario
+                        
+                        // Si startLocation aún no está definido, o si el input de partida está vacío,
+                        // actualizar el input de partida y la variable startLocation con la ubicación actual
+                        if (!startLocation || startLocationInput.value === '') {
+                             startLocation = new google.maps.LatLng(userPos.lat, userPos.lng);
+                             if (startLocationInput.value === '') { // Solo geocodificar y rellenar si está vacío
+                                 geocodeLocation(startLocation).then(result => {
+                                     if (result) startLocationInput.value = result.formatted_address;
+                                 }).catch(e => console.warn("No se pudo geocodificar la ubicación inicial:", e));
+                             }
+                        }
+
+                        // Centra el mapa en el usuario al inicio o si el usuario sale del foco del mapa
+                        if (map.getZoom() < 10 || !map.getBounds().contains(userPos)) {
+                            map.setCenter(userPos);
+                            map.setZoom(15);
+                        }
+
+                        // Si hay un destino, comprueba la distancia
+                        if (destinationLocation) {
+                            checkDistance(userPos); // La alarma siempre se basa en la ubicación *actual* del usuario
+                        } else {
+                            updateStatus('Ubicación actual obtenida. Establece un destino.');
+                        }
+                    },
+                    (error) => {
+                        handleLocationError(error);
+                    },
+                    { // Opciones para alta precisión y evitar caché
+                        enableHighAccuracy: true,
+                        maximumAge: 0,
+                        timeout: 5000
+                    }
+                );
+            } else {
+                // El navegador no soporta Geolocalización
+                handleLocationError(null);
+            }
+        }
+
+        /**
+         * Rellena el input de partida con la dirección actual del usuario.
+         */
+        async function populateStartWithCurrentLocation() {
+            if (userMarker.getPosition()) {
+                const userPos = userMarker.getPosition();
+                startLocation = userPos; // Establece la variable startLocation a la ubicación actual
+                try {
+                    const result = await geocodeLocation(userPos);
+                    startLocationInput.value = result.formatted_address;
+                    updateStatus("Ubicación actual establecida como punto de partida.");
+                    // Si ya hay un destino, recalcular la ruta
+                    if (destinationLocation) {
+                        calculateAndDisplayRoute(startLocation, destinationLocation);
+                    }
+                } catch (error) {
+                    updateStatus("No se pudo obtener la dirección de tu ubicación actual.", 'error');
+                    console.error("Error geocodificando ubicación actual:", error);
+                }
+            } else {
+                updateStatus("Esperando tu ubicación actual...", 'info');
+                // Intentar obtener la ubicación si aún no está disponible
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const userPos = { lat: position.coords.latitude, lng: position.coords.longitude };
+                        userMarker.setPosition(userPos);
+                        populateStartWithCurrentLocation(); // Llamar de nuevo una vez obtenida
+                    },
+                    (error) => {
+                        updateStatus("No se pudo obtener tu ubicación para establecerla como partida.", 'error');
+                        console.error("Error al obtener ubicación:", error);
+                    }
+                );
+            }
+        }
+
+        /**
+         * Maneja los errores de geolocalización.
+         * @param {GeolocationPositionError} error - El objeto de error de geolocalización.
+         */
+        function handleLocationError(error) {
+            statusPanel.classList.remove('hidden');
+            statusPanel.style.backgroundColor = '#DC2626'; // Color rojo para errores
+
+            let errorMessage = 'Error desconocido al obtener la ubicación.';
+            if (error) {
+                switch (error.code) {
+                    case error.PERMISSION_DENIED:
+                        errorMessage = "Error: Permiso de geolocalización denegado. Por favor, permite el acceso a la ubicación.";
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        errorMessage = "Error: La información de ubicación no está disponible.";
+                        break;
+                    case error.TIMEOUT:
+                        errorMessage = "Error: Tiempo de espera para obtener la ubicación agotado.";
+                        break;
+                    default:
+                        errorMessage = `Error de geolocalización: ${error.message}`;
+                }
+            } else {
+                errorMessage = "Error: Tu navegador no soporta geolocalización.";
+            }
+            updateStatus(errorMessage);
+        }
+
+        /**
+         * Geocodifica una dirección o coordenadas (LatLng).
+         * @param {string|google.maps.LatLng} addressOrLatLng - Dirección como string o coordenadas LatLng.
+         * @returns {Promise<google.maps.GeocoderResult>} Resultado de la geocodificación.
+         */
+        async function geocodeLocation(addressOrLatLng) {
+            showLoading(true);
+            return new Promise((resolve, reject) => {
+                let request;
+                if (typeof addressOrLatLng === 'string') {
+                    request = { address: addressOrLatLng };
+                } else {
+                    request = { location: addressOrLatLng };
+                }
+
+                geocoder.geocode(request, (results, status) => {
+                    showLoading(false);
+                    if (status === 'OK' && results[0]) {
+                        resolve(results[0]);
+                    } else {
+                        reject(`Geocodificación fallida: ${status}`);
+                    }
+                });
+            });
+        }
+
+        /**
+         * Calcula y muestra la ruta entre dos puntos en el mapa.
+         * También actualiza la distancia de la ruta.
+         * @param {google.maps.LatLng} origin - Coordenadas del punto de origen.
+         * @param {google.maps.LatLng} destination - Coordenadas del punto de destino.
+         */
+        function calculateAndDisplayRoute(origin, destination) {
+            routeDistanceText.textContent = ''; // Limpiar texto de distancia anterior
+            if (!origin || !destination) {
+                updateStatus('No se pudo calcular la ruta: falta origen o destino.', 'error');
+                directionsRenderer.setDirections({ routes: [] });
+                // Asegurar que los marcadores vuelvan a ser visibles si no hay ruta
+                ensureMarkersVisibleWithoutRoute();
+                return;
+            }
+
+            directionsService.route(
+                {
+                    origin: origin,
+                    destination: destination,
+                    travelMode: google.maps.TravelMode.DRIVING
+                },
+                (response, status) => {
+                    if (status === 'OK' && response.routes[0]) {
+                        directionsRenderer.setDirections(response);
+                        // Ocultar marcadores individuales si la ruta se muestra
+                        userMarker.setMap(null);
+                        if (originMarker) originMarker.setMap(null);
+                        if (destinationMarker) destinationMarker.setMap(null); 
+
+                        // Mostrar la distancia de la ruta
+                        const route = response.routes[0];
+                        const distanceText = route.legs[0].distance.text;
+                        routeDistanceText.textContent = `Distancia en ruta: ${distanceText}`;
+                        updateStatus('Ruta calculada y mostrada.');
+                    } else {
+                        directionsRenderer.setDirections({ routes: [] });
+                        console.error('Error al calcular la ruta:', status);
+                        updateStatus(`Error al calcular la ruta: ${status}. Intenta con otras direcciones.`, 'error');
+                        // Asegurar que los marcadores individuales vuelvan a ser visibles si no hay ruta
+                        ensureMarkersVisibleWithoutRoute();
+                    }
+                }
+            );
+        }
+
+        /**
+         * Asegura que los marcadores de usuario, origen y destino sean visibles si no hay una ruta activa.
+         */
+        function ensureMarkersVisibleWithoutRoute() {
+            userMarker.setMap(map); // Siempre mostrar el marcador del usuario
+            
+            // Mostrar marcador de origen si está definido y no es la ubicación actual
+            if (startLocation && userMarker.getPosition() && !userMarker.getPosition().equals(startLocation)) {
+                if (!originMarker) {
+                    originMarker = new google.maps.Marker({
+                        position: startLocation,
+                        map: map,
+                        title: 'Punto de Partida',
+                        icon: { url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png' }
+                    });
+                } else {
+                    originMarker.setPosition(startLocation);
+                    originMarker.setMap(map);
+                }
+            } else if (originMarker) {
+                originMarker.setMap(null); // Ocultar si ya no es necesario
+            }
+
+            // Si hay un destino definido, mostrar su marcador
+            if (destinationLocation) {
+                if (!destinationMarker) {
+                    destinationMarker = new google.maps.Marker({
+                        position: destinationLocation,
+                        map: map,
+                        title: 'Destino',
+                        icon: { url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png' }
+                    });
+                } else {
+                    destinationMarker.setPosition(destinationLocation);
+                    destinationMarker.setMap(map);
+                }
+            } else if (destinationMarker) {
+                destinationMarker.setMap(null); // Ocultar si ya no es necesario
+            }
+        }
+
+        /**
+         * Maneja el clic en el mapa para establecer un destino o un punto de partida.
+         * @param {google.maps.LatLng} latLng - Coordenadas del punto donde se hizo clic.
+         */
+        async function handleMapClick(latLng) {
+            try {
+                const result = await geocodeLocation(latLng);
+                const selectedLocation = result.geometry.location;
+                const formattedAddress = result.formatted_address;
+
+                if (mapSelectionMode === 'origin') {
+                    startLocation = selectedLocation;
+                    startLocationInput.value = formattedAddress;
+                    // Mostrar marcador de origen si es diferente de la ubicación actual
+                    if (originMarker) originMarker.setMap(null); // Limpiar anterior
+                    if (userMarker.getPosition() && !userMarker.getPosition().equals(selectedLocation)) {
+                        originMarker = new google.maps.Marker({
+                            position: startLocation,
+                            map: map,
+                            title: 'Punto de Partida',
+                            icon: { url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png' }
+                        });
+                    }
+                    userMarker.setMap(map); // Asegurar que el marcador de usuario sea visible
+                    updateStatus(`Punto de partida seleccionado en el mapa: ${formattedAddress}`);
+                } else { // mapSelectionMode es 'destination' o null (comportamiento por defecto)
+                    destinationLocation = selectedLocation;
+                    destinationInput.value = formattedAddress;
+                    if (destinationMarker) destinationMarker.setMap(null); // Limpiar anterior
+                    destinationMarker = new google.maps.Marker({
+                        position: destinationLocation,
+                        map: map,
+                        title: 'Destino',
+                        icon: { url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png' }
+                    });
+                    updateStatus(`Destino seleccionado en el mapa: ${formattedAddress}`);
+                }
+
+                map.setCenter(selectedLocation);
+                map.setZoom(14);
+                alarmTriggered = false; // Resetear alarma si se cambia el destino
+
+                // Recalcular ruta después de cualquier selección si ambos puntos están definidos
+                let currentRouteOrigin = startLocation || userMarker.getPosition();
+                if (currentRouteOrigin && destinationLocation) {
+                    calculateAndDisplayRoute(currentRouteOrigin, destinationLocation);
+                } else {
+                    updateStatus('Punto fijado. Ahora define el otro punto o espera la ubicación actual.', 'info');
+                }
+                mapSelectionMode = null; // Resetear el modo de selección del mapa
+                expandPanel(); // Expandir el panel una vez que se hizo la selección
+            } catch (error) {
+                updateStatus(`Error al seleccionar punto en el mapa: ${error}. Por favor, intenta de nuevo.`, 'error');
+                console.error(error);
+                mapSelectionMode = null; // Resetear el modo de selección del mapa
+                expandPanel(); // Expandir el panel incluso si hay un error
+            }
+        }
+
+        /**
+         * Se ejecuta al pulsar el botón "Activar Alarma".
+         * Obtiene la dirección de partida y destino, y establece la la alarma.
+         */
+        async function setAlarm() {
+            const startAddress = startLocationInput.value.trim();
+            const destAddress = destinationInput.value.trim();
+            const distance = parseFloat(distanceInput.value);
+
+            if (!startAddress && !userMarker.getPosition()) {
+                updateStatus("No se ha podido obtener tu ubicación actual y no hay un punto de partida manual. Espera o introduce una dirección de partida.", 'error');
+                return;
+            }
+
+            if (!destAddress || isNaN(distance) || distance <= 0) {
+                updateStatus("Por favor, introduce un destino válido y una distancia mayor a 0.", 'error');
+                return;
+            }
+
+            try {
+                let routeOriginLatLng;
+                if (startAddress) {
+                    const startResult = await geocodeLocation(startAddress);
+                    routeOriginLatLng = startResult.geometry.location;
+                    startLocation = routeOriginLatLng; // Actualizar la variable startLocation
+
+                    if (originMarker) originMarker.setMap(null); // Limpiar marcador anterior
+                    // Mostrar marcador de origen si es diferente de la ubicación actual
+                    if (userMarker.getPosition() && !userMarker.getPosition().equals(routeOriginLatLng)) {
+                        originMarker = new google.maps.Marker({
+                            position: routeOriginLatLng,
+                            map: map,
+                            title: 'Punto de Partida',
+                            icon: { url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png' }
+                        });
+                        userMarker.setMap(map); // Asegurar que el marcador de usuario sea visible
+                    } else if (!userMarker.getPosition() && routeOriginLatLng) { // Si no hay user marker, siempre mostrar el custom origin
+                         originMarker = new google.maps.Marker({
+                            position: routeOriginLatLng,
+                            map: map,
+                            title: 'Punto de Partida',
+                            icon: { url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png' }
+                        });
+                    }
+                } else {
+                    routeOriginLatLng = userMarker.getPosition();
+                    startLocation = routeOriginLatLng; // Actualizar la variable startLocation
+                    if (originMarker) originMarker.setMap(null); // Ocultar marcador de origen si se vuelve a usar la ubicación actual
+                }
+                
+                const destinationResult = await geocodeLocation(destAddress);
+                destinationLocation = destinationResult.geometry.location;
+                alarmDistanceKm = distance;
+                alarmTriggered = false; // Reseteamos la alarma
+
+                directionsRenderer.setDirections({ routes: [] }); // Limpiar cualquier ruta anterior
+
+                if (destinationMarker) {
+                    destinationMarker.setPosition(destinationLocation);
+                    destinationMarker.setMap(map);
+                } else {
+                    destinationMarker = new google.maps.Marker({
+                        position: destinationLocation,
+                        map: map,
+                        title: "Destino",
+                        animation: google.maps.Animation.DROP,
+                        icon: {
+                            url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png'
+                        }
+                    });
+                }
+                map.setCenter(destinationLocation);
+                map.setZoom(14);
+
+                updateStatus(`Destino fijado: ${destinationResult.formatted_address}. Alarma sonará a ${alarmDistanceKm} km.`);
+
+                calculateAndDisplayRoute(routeOriginLatLng, destinationLocation);
+
+            } catch (error) {
+                updateStatus(`Error al establecer el origen o destino: ${error}. Por favor, verifica las direcciones.`, 'error');
+                console.error(error);
+            }
+        }
+
+        /**
+         * Calcula la distancia entre la ubicación del usuario y el destino.
+         * Si la distancia es menor a la establecida, dispara la alarma.
+         * @param {object} userPos - Objeto con las coordenadas {lat, lng} del usuario.
+         */
+        function checkDistance(userPos) {
+            if (!destinationLocation || alarmTriggered) return;
+
+            const userLatLng = new google.maps.LatLng(userPos.lat, userPos.lng);
+            
+            // Usamos la librería de geometría esférica para un cálculo preciso
+            const distanceInMeters = google.maps.geometry.spherical.computeDistanceBetween(userLatLng, destinationLocation);
+            const distanceInKm = distanceInMeters / 1000;
+
+            updateStatus(`Distancia al destino: ${distanceInKm.toFixed(2)} km.`);
+
+            // Comprobamos si hay que disparar la alarma
+            if (distanceInKm <= alarmDistanceKm) {
+                triggerAlarm();
+                alarmTriggered = true;
+                // Si quieres que la alarma siga sonando hasta que el usuario la desactive manualmente, no hagas null el destino.
+                // Si quieres que solo suene una vez y luego se "desarme", podrías hacer:
+                // destinationLocation = null;
+                // if(destinationMarker) destinationMarker.setMap(null);
+            }
+        }
+
+        /**
+         * Actualiza el texto en el panel de estado y su color si es un error.
+         * También oculta el texto de distancia de ruta si se muestra un error.
+         * @param {string} text - El mensaje a mostrar.
+         * @param {string} type - Tipo de mensaje ('info' o 'error').
+         */
+        function updateStatus(text, type = 'info') {
+            statusPanel.classList.remove('hidden');
+            
+            if (type === 'error') {
+                statusPanel.style.backgroundColor = '#DC2626'; // Rojo para errores
+                routeDistanceText.textContent = ''; // Limpiar distancia de ruta en caso de error
+            } else {
+                statusPanel.style.backgroundColor = 'rgba(30, 41, 59, 0.9)'; // Azul oscuro para información normal
+            }
+            statusText.textContent = text;
+        }
+
+        /**
+         * Muestra u oculta el indicador de carga.
+         * @param {boolean} show - True para mostrar, false para ocultar.
+         */
+        function showLoading(show) {
+            if (show) {
+                loadingIndicator.classList.remove('hidden');
+            } else {
+                loadingIndicator.classList.add('hidden');
+            }
+        }
+
+        /**
+         * Activa la alarma: reproduce un sonido y muestra un mensaje.
+         */
+        function triggerAlarm() {
+            updateStatus(`¡ALERTA! Estás a menos de ${alarmDistanceKm} km de tu destino.`, 'info');
+            statusPanel.style.backgroundColor = '#16A34A'; // Verde para la alerta
+
+            // Asegurarse de que el contexto de audio se inicie por una interacción del usuario
+            if (alarmSynth && Tone.context.state !== 'running') {
+                Tone.start();
+            }
+            
+            // Reproducir una secuencia de notas para la alarma
+            if (alarmSynth) {
+                const now = Tone.now();
+                alarmSynth.triggerAttackRelease("C5", "8n", now);
+                alarmSynth.triggerAttackRelease("G5", "8n", now + 0.2);
+                alarmSynth.triggerAttackRelease("C5", "8n", now + 0.4);
+            }
+
+            // También podemos hacer vibrar el dispositivo si es compatible
+            if (window.navigator && window.navigator.vibrate) {
+                navigator.vibrate([500, 200, 500]); // Vibra 500ms, pausa 200ms, vibra 500ms
+            }
+
+            // Opcional: limpiar el marcador de destino después de la alarma
+            // setTimeout(() => {
+            //     if(destinationMarker) destinationMarker.setMap(null);
+            // }, 10000); // 10 segundos después
+        }
+
+        // Exportar initMap al ámbito global para que la API de Google Maps pueda llamarla
+        window.initMap = initMap;
+    </script>
+    
+    <!-- Script de la API de Google Maps con tu clave ya insertada -->
+    <!-- Se añaden las librerías 'places' y 'directions' explícitamente y se especifica la versión 'weekly' -->
+    <script async defer
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDtcqVqcrFrSU8KdDaLpQZQmieLFtScKmQ&loading=async&libraries=geometry,places,directions&v=weekly&callback=initMap">
+    </script>
+</body>
+</html>
+
