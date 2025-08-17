@@ -3,12 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Travel Destiny</title> <!-- Título de la app cambiado a Travel Destiny -->
+    <title>Travel Destiny</title>
     <!-- Tailwind CSS para un diseño moderno y adaptable -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Tone.js para generar el sonido de la alarma -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     <style>
+        /* Importar la fuente Montserrat para el título de la app */
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&display=swap');
+
         /* Estilo para asegurar que el mapa ocupe todo el espacio disponible */
         #map {
             height: 100%;
@@ -18,29 +21,53 @@
             height: 100%;
             margin: 0;
             padding: 0;
-            font-family: 'Inter', sans-serif;
+            font-family: 'Inter', sans-serif; /* Fuente 'Inter' para una apariencia moderna */
             overflow: hidden; /* Evita el scroll global del body, ajustado para el layout de la app */
         }
-        /* Estilos para el panel de control flotante */
-        .controls-panel {
+        /* Estilos para el panel de estado flotante (arriba) */
+        .status-panel {
             position: absolute;
-            top: 10px;
+            top: 10px; /* Arriba */
             left: 50%;
             transform: translateX(-50%);
             z-index: 5;
-            background-color: rgba(255, 255, 255, 0.95);
+            background-color: rgba(30, 41, 59, 0.9); /* Azul oscuro para información normal */
+            color: white;
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 95%;
+            max-width: 500px;
+            text-align: center;
+            font-weight: 500;
+            box-sizing: border-box;
+            transition: background-color 0.3s ease-in-out; /* Transición suave para el color de estado */
+        }
+        /* Estilos para el panel de control flotante (abajo y más pequeño al colapsar) */
+        .controls-panel {
+            position: absolute;
+            bottom: 10px; /* Abajo */
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 5;
+            background-color: rgba(255, 255, 255, 0.8); /* Fondo más transparente */
             padding: 1rem;
             border-radius: 0.75rem;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             width: 95%;
             max-width: 500px;
-            box-sizing: border-box; /* Incluye padding y borde en el ancho total */
-            transition: max-height 0.3s ease-out, padding 0.3s ease-out; /* Smooth transitions */
-            max-height: 600px; /* Initial max height to show all content */
+            box-sizing: border-box;
+            transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+            max-height: 450px; /* Altura máxima AUMENTADA para el panel desplegado */
         }
         .controls-panel.collapsed {
-            max-height: 60px; /* Suficiente para mostrar el título y el botón de alternar */
-            padding-bottom: 0.5rem;
+            max-height: 40px; /* Tamaño mucho más pequeño al colapsar */
+            padding-top: 0.4rem; /* Ajuste de padding para centrar contenido */
+            padding-bottom: 0.4rem;
+        }
+        /* Ajuste de margen para el título en el panel colapsado */
+        .controls-panel.collapsed .app-title {
+            margin-bottom: 0 !important; /* Elimina el margen inferior del título */
         }
         .controls-panel .content-wrapper {
             opacity: 1;
@@ -54,24 +81,7 @@
             pointer-events: none; /* Deshabilita interacciones cuando está colapsado */
             height: 0; /* Colapsa el contenido */
             overflow: hidden;
-        }
-        /* Estilos para el panel de estado flotante */
-        .status-panel {
-            position: absolute;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 5;
-            background-color: rgba(30, 41, 59, 0.9);
-            color: white;
-            padding: 0.75rem 1.25rem;
-            border-radius: 0.75rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            width: 95%;
-            max-width: 500px;
-            text-align: center;
-            font-weight: 500;
-            box-sizing: border-box;
+            padding: 0; /* Asegura que el padding no ocupe espacio cuando colapsa */
         }
         .loading-spinner {
             border: 4px solid rgba(0, 0, 0, 0.1);
@@ -92,30 +102,43 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Enlace para la fuente Montserrat -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&display=swap" rel="stylesheet">
 </head>
 <body class="bg-gray-100">
 
     <!-- Contenedor principal del mapa -->
     <div id="map"></div>
 
-    <!-- Panel de control para ingresar destino y distancia -->
+    <!-- Panel para mostrar el estado y la distancia restante (ARRIBA) -->
+    <div id="status-panel" class="status-panel hidden">
+        <p id="status-text">Esperando destino...</p>
+        <p id="route-distance-text" class="text-sm mt-1"></p>
+        <div id="loading-indicator" class="mt-2 text-sm hidden">
+            <span class="loading-spinner"></span> Cargando...
+        </div>
+    </div>
+
+    <!-- Panel de control para ingresar destino y distancia (ABAJO) -->
     <div class="controls-panel" id="controls-panel">
         <div class="absolute top-2 right-2 z-10">
-            <button id="toggle-panel-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs px-2 py-1 rounded-full shadow">
-                Contraer
+            <!-- Botón de toggle con icono de flecha -->
+            <button id="toggle-panel-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 text-lg px-2 py-1 rounded-full shadow flex items-center justify-center w-8 h-8">
+                <span id="toggle-arrow">&#x25BC;</span> <!-- Flecha hacia abajo (para 'Contraer') -->
             </button>
         </div>
-        <h1 class="text-xl font-bold text-teal-700 mb-2 text-center">Travel Destiny</h1> <!-- Nombre de la app cambiado -->
+        <!-- Título de la app con nueva fuente y estilos para destacar -->
+        <h1 class="text-xl font-extrabold text-teal-700 mb-2 text-center tracking-wider app-title" style="font-family: 'Montserrat', sans-serif;">Travel Destiny</h1>
         <div id="panel-content-wrapper" class="content-wrapper space-y-4">
             <div>
                 <label for="start-location-input" class="block text-sm font-medium text-gray-700">Punto de partida:</label>
                 <input type="text" id="start-location-input" placeholder="Tu ubicación actual o una dirección" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-teal-500 focus:border-teal-500 sm:text-sm">
                 <div class="flex space-x-2 mt-2">
                     <button id="use-current-location-btn" class="w-1/2 bg-teal-500 hover:bg-teal-600 text-white text-sm font-semibold py-1.5 px-3 rounded-md transition duration-300 ease-in-out transform hover:scale-105">
-                        Usar mi ubicación actual
+                        Mi ubicación
                     </button>
                     <button id="select-origin-on-map-btn" class="w-1/2 bg-teal-500 hover:bg-teal-600 text-white text-sm font-semibold py-1.5 px-3 rounded-md transition duration-300 ease-in-out transform hover:scale-105">
-                        Seleccionar en mapa (Partida)
+                        Partida
                     </button>
                 </div>
             </div>
@@ -123,25 +146,16 @@
                 <label for="destination-input" class="block text-sm font-medium text-gray-700">Destino:</label>
                 <input type="text" id="destination-input" placeholder="Escribe una dirección o haz clic en el mapa" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-teal-500 focus:border-teal-500 sm:text-sm">
                 <button id="select-destination-on-map-btn" class="mt-2 w-full bg-teal-500 hover:bg-teal-600 text-white text-sm font-semibold py-1.5 px-3 rounded-md transition duration-300 ease-in-out transform hover:scale-105">
-                    Seleccionar en mapa (Destino)
+                    Destino
                 </button>
             </div>
             <div>
                 <label for="distance-input" class="block text-sm font-medium text-gray-700">Avisar a (km):</label>
                 <input type="number" id="distance-input" value="1" min="0.1" step="0.1" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-teal-500 focus:border-teal-500 sm:text-sm">
             </div>
-            <button id="set-alarm-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-md transition duration-300 ease-in-out shadow-lg transform hover:scale-105">
+            <button id="set-alarm-btn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 px-4 rounded-md transition duration-300 ease-in-out shadow-lg transform hover:scale-105">
                 Activar Alarma
             </button>
-        </div>
-    </div>
-
-    <!-- Panel para mostrar el estado y la distancia restante -->
-    <div id="status-panel" class="status-panel hidden">
-        <p id="status-text">Esperando destino...</p>
-        <p id="route-distance-text" class="text-sm mt-1"></p> <!-- Nueva línea para la distancia de ruta -->
-        <div id="loading-indicator" class="mt-2 text-sm hidden">
-            <span class="loading-spinner"></span> Cargando...
         </div>
     </div>
 
@@ -160,6 +174,7 @@
         let alarmTriggered = false;
         let watchId; // ID para el seguimiento de la geolocalización
         let mapSelectionMode = null; // 'origin' o 'destination' - para clicks en el mapa
+        let userPathCoords = []; // Almacena coordenadas para dibujar el trayecto
 
         // Sintetizador para el sonido de la alarma con Tone.js
         let alarmSynth;
@@ -171,20 +186,24 @@
         const selectDestinationOnMapBtn = document.getElementById('select-destination-on-map-btn');
         const distanceInput = document.getElementById('distance-input');
         const setAlarmBtn = document.getElementById('set-alarm-btn');
-        const controlsPanel = document.getElementById('controls-panel'); // Panel de controles
-        const togglePanelBtn = document.getElementById('toggle-panel-btn'); // Botón para contraer/expandir
-        const panelContentWrapper = document.getElementById('panel-content-wrapper'); // Contenedor del contenido del panel
+        const controlsPanel = document.getElementById('controls-panel');
+        const togglePanelBtn = document.getElementById('toggle-panel-btn');
+        const toggleArrow = document.getElementById('toggle-arrow'); // Referencia al span de la flecha
+        const panelContentWrapper = document.getElementById('panel-content-wrapper');
         const statusPanel = document.getElementById('status-panel');
         const statusText = document.getElementById('status-text');
         const routeDistanceText = document.getElementById('route-distance-text');
         const loadingIndicator = document.getElementById('loading-indicator');
+
+        // Trayecto del usuario
+        let userTrajectoryPolyline;
 
         /**
          * Función para contraer el panel de control.
          */
         function collapsePanel() {
             controlsPanel.classList.add('collapsed');
-            togglePanelBtn.textContent = 'Expandir';
+            toggleArrow.innerHTML = '&#x25B2;'; // Flecha hacia arriba
         }
 
         /**
@@ -192,7 +211,7 @@
          */
         function expandPanel() {
             controlsPanel.classList.remove('collapsed');
-            togglePanelBtn.textContent = 'Contraer';
+            toggleArrow.innerHTML = '&#x25BC;'; // Flecha hacia abajo
         }
 
         /**
@@ -200,37 +219,16 @@
          * Esta función es llamada por el script de la API de Google Maps una vez que se ha cargado.
          */
         function initMap() {
-            // Coordenadas iniciales (se actualizarán con la ubicación del usuario)
             const initialPosition = { lat: -33.4489, lng: -70.6693 }; // Santiago, Chile (usado como valor por defecto)
 
-            // Creación del mapa
             map = new google.maps.Map(document.getElementById("map"), {
-                zoom: 12, // Zoom inicial
+                zoom: 12,
                 center: initialPosition,
                 mapTypeControl: false,
                 streetViewControl: false,
                 fullscreenControl: false,
-                styles: [ // Estilo de mapa personalizado para un look más limpio
-                    { elementType: "geometry", stylers: [{ color: "#f5f5f5" }] },
-                    { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-                    { elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
-                    { elementType: "labels.text.stroke", stylers: [{ color: "#f5f5f5" }] },
-                    { featureType: "administrative.land_parcel", stylers: [{ visibility: "off" }] },
-                    { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#bdbdbd" }] },
-                    { featureType: "poi", elementType: "geometry", stylers: [{ color: "#eeeeee" }] },
-                    { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
-                    { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#e5e5e5" }] },
-                    { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
-                    { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
-                    { featureType: "road.arterial", elementType: "labels.text.fill", stylers: [{ color: "#757575" }] },
-                    { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#dadada" }] },
-                    { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#616161" }] },
-                    { featureType: "road.local", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
-                    { featureType: "transit.line", elementType: "geometry", stylers: [{ color: "#e5e5e5" }] },
-                    { featureType: "transit.station", elementType: "geometry", stylers: [{ color: "#eeeeee" }] },
-                    { featureType: "water", elementType: "geometry", stylers: [{ color: "#c9c9c9" }] },
-                    { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#9e9e9e" }] },
-                ],
+                styles: [], // Se mantienen los estilos vacíos para usar el estilo predeterminado de Google Maps
+                mapTypeId: google.maps.MapTypeId.ROADMAP // Siempre se carga como mapa de carretera estándar
             });
 
             geocoder = new google.maps.Geocoder();
@@ -245,19 +243,31 @@
                 suppressMarkers: true // Evita que el renderizador de direcciones ponga sus propios marcadores
             });
 
-            // Configurar el marcador del usuario
+            // Configurar el marcador del usuario como una flecha
             userMarker = new google.maps.Marker({
                 map: map,
                 title: "Tu ubicación actual",
                 icon: {
-                    path: google.maps.SymbolPath.CIRCLE,
+                    path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW, // Forma de flecha
                     scale: 8,
                     fillColor: "#00BCD4", // Color calipso para el marcador de usuario
                     fillOpacity: 1,
                     strokeColor: "white",
                     strokeWeight: 2,
+                    rotation: 0 // La rotación se actualizará dinámicamente
                 },
             });
+
+            // Inicializar la Polyline para el trayecto del usuario con color gris
+            userTrajectoryPolyline = new google.maps.Polyline({
+                path: userPathCoords,
+                geodesic: true,
+                strokeColor: '#AAAAAA', // Color gris para el trayecto del usuario (similar a Google Maps)
+                strokeOpacity: 0.7,
+                strokeWeight: 4,
+                map: map
+            });
+
 
             // Iniciar el seguimiento de la ubicación del usuario
             startGeolocation();
@@ -285,9 +295,9 @@
             togglePanelBtn.addEventListener("click", () => {
                 controlsPanel.classList.toggle('collapsed');
                 if (controlsPanel.classList.contains('collapsed')) {
-                    togglePanelBtn.textContent = 'Expandir';
+                    toggleArrow.innerHTML = '&#x25B2;'; // Flecha hacia arriba cuando está colapsado
                 } else {
-                    togglePanelBtn.textContent = 'Contraer';
+                    toggleArrow.innerHTML = '&#x25BC;'; // Flecha hacia abajo cuando está expandido
                 }
             });
 
@@ -296,11 +306,7 @@
                 if (!alarmSynth) { // Asegura que el sintetizador solo se cree una vez
                     alarmSynth = new Tone.Synth().toDestination();
                 }
-                // También puedes iniciar el contexto de audio aquí si Tone.js lo requiere explícitamente y no lo hace al crear el sintetizador
-                // if (Tone.context.state !== 'running') {
-                //    Tone.start();
-                // }
-            }, { once: true }); // El evento se dispara solo una vez
+            }, { once: true });
         }
 
         /**
@@ -311,7 +317,6 @@
             statusPanel.classList.remove('hidden');
 
             if (navigator.geolocation) {
-                // watchPosition actualiza la ubicación continuamente
                 watchId = navigator.geolocation.watchPosition(
                     (position) => {
                         const userPos = {
@@ -320,6 +325,26 @@
                         };
                         
                         userMarker.setPosition(userPos); // Actualiza la posición del marcador del usuario
+                        
+                        // Actualizar trayecto del usuario y rotación de la flecha
+                        userPathCoords.push(userPos);
+                        userTrajectoryPolyline.setPath(userPathCoords);
+
+                        // Calcular la rotación de la flecha si hay al menos dos puntos
+                        if (userPathCoords.length > 1) {
+                            const lastPoint = new google.maps.LatLng(userPathCoords[userPathCoords.length - 2]);
+                            const currentPoint = new google.maps.LatLng(userPos.lat, userPos.lng);
+                            const heading = google.maps.geometry.spherical.computeHeading(lastPoint, currentPoint);
+                            userMarker.setIcon({
+                                path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                                scale: 8,
+                                fillColor: "#00BCD4",
+                                fillOpacity: 1,
+                                strokeColor: "white",
+                                strokeWeight: 2,
+                                rotation: heading // Establece la rotación de la flecha
+                            });
+                        }
                         
                         // Si startLocation aún no está definido, o si el input de partida está vacío,
                         // actualizar el input de partida y la variable startLocation con la ubicación actual
@@ -338,7 +363,6 @@
                             map.setZoom(15);
                         }
 
-                        // Si hay un destino, comprueba la distancia
                         if (destinationLocation) {
                             checkDistance(userPos); // La alarma siempre se basa en la ubicación *actual* del usuario
                         } else {
@@ -348,14 +372,13 @@
                     (error) => {
                         handleLocationError(error);
                     },
-                    { // Opciones para alta precisión y evitar caché
+                    {
                         enableHighAccuracy: true,
                         maximumAge: 0,
                         timeout: 5000
                     }
                 );
             } else {
-                // El navegador no soporta Geolocalización
                 handleLocationError(null);
             }
         }
@@ -381,12 +404,11 @@
                 }
             } else {
                 updateStatus("Esperando tu ubicación actual...", 'info');
-                // Intentar obtener la ubicación si aún no está disponible
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
                         const userPos = { lat: position.coords.latitude, lng: position.coords.longitude };
                         userMarker.setPosition(userPos);
-                        populateStartWithCurrentLocation(); // Llamar de nuevo una vez obtenida
+                        populateStartWithCurrentLocation();
                     },
                     (error) => {
                         updateStatus("No se pudo obtener tu ubicación para establecerla como partida.", 'error');
@@ -402,7 +424,7 @@
          */
         function handleLocationError(error) {
             statusPanel.classList.remove('hidden');
-            statusPanel.style.backgroundColor = '#DC2626'; // Color rojo para errores
+            statusPanel.style.backgroundColor = '#DC2626';
 
             let errorMessage = 'Error desconocido al obtener la ubicación.';
             if (error) {
@@ -462,7 +484,6 @@
             if (!origin || !destination) {
                 updateStatus('No se pudo calcular la ruta: falta origen o destino.', 'error');
                 directionsRenderer.setDirections({ routes: [] });
-                // Asegurar que los marcadores vuelvan a ser visibles si no hay ruta
                 ensureMarkersVisibleWithoutRoute();
                 return;
             }
@@ -476,12 +497,10 @@
                 (response, status) => {
                     if (status === 'OK' && response.routes[0]) {
                         directionsRenderer.setDirections(response);
-                        // Ocultar marcadores individuales si la ruta se muestra
-                        userMarker.setMap(null);
+                        // userMarker.setMap(null); // No ocultar el marcador del usuario
                         if (originMarker) originMarker.setMap(null);
                         if (destinationMarker) destinationMarker.setMap(null); 
 
-                        // Mostrar la distancia de la ruta
                         const route = response.routes[0];
                         const distanceText = route.legs[0].distance.text;
                         routeDistanceText.textContent = `Distancia en ruta: ${distanceText}`;
@@ -490,7 +509,6 @@
                         directionsRenderer.setDirections({ routes: [] });
                         console.error('Error al calcular la ruta:', status);
                         updateStatus(`Error al calcular la ruta: ${status}. Intenta con otras direcciones.`, 'error');
-                        // Asegurar que los marcadores individuales vuelvan a ser visibles si no hay ruta
                         ensureMarkersVisibleWithoutRoute();
                     }
                 }
@@ -502,8 +520,19 @@
          */
         function ensureMarkersVisibleWithoutRoute() {
             userMarker.setMap(map); // Siempre mostrar el marcador del usuario
+            // Restablecer el icono de la flecha a su configuración predeterminada si no hay ruta
+            userMarker.setIcon({
+                path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                scale: 8,
+                fillColor: "#00BCD4",
+                fillOpacity: 1,
+                strokeColor: "white",
+                strokeWeight: 2,
+                rotation: 0 // Restablecer rotación
+            });
+            userTrajectoryPolyline.setPath([]); // Limpiar el trayecto
+            userPathCoords = []; // Resetear las coordenadas del trayecto
             
-            // Mostrar marcador de origen si está definido y no es la ubicación actual
             if (startLocation && userMarker.getPosition() && !userMarker.getPosition().equals(startLocation)) {
                 if (!originMarker) {
                     originMarker = new google.maps.Marker({
@@ -517,10 +546,9 @@
                     originMarker.setMap(map);
                 }
             } else if (originMarker) {
-                originMarker.setMap(null); // Ocultar si ya no es necesario
+                originMarker.setMap(null);
             }
 
-            // Si hay un destino definido, mostrar su marcador
             if (destinationLocation) {
                 if (!destinationMarker) {
                     destinationMarker = new google.maps.Marker({
@@ -534,7 +562,7 @@
                     destinationMarker.setMap(map);
                 }
             } else if (destinationMarker) {
-                destinationMarker.setMap(null); // Ocultar si ya no es necesario
+                destinationMarker.setMap(null);
             }
         }
 
@@ -551,8 +579,7 @@
                 if (mapSelectionMode === 'origin') {
                     startLocation = selectedLocation;
                     startLocationInput.value = formattedAddress;
-                    // Mostrar marcador de origen si es diferente de la ubicación actual
-                    if (originMarker) originMarker.setMap(null); // Limpiar anterior
+                    if (originMarker) originMarker.setMap(null);
                     if (userMarker.getPosition() && !userMarker.getPosition().equals(selectedLocation)) {
                         originMarker = new google.maps.Marker({
                             position: startLocation,
@@ -561,12 +588,12 @@
                             icon: { url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png' }
                         });
                     }
-                    userMarker.setMap(map); // Asegurar que el marcador de usuario sea visible
+                    userMarker.setMap(map);
                     updateStatus(`Punto de partida seleccionado en el mapa: ${formattedAddress}`);
                 } else { // mapSelectionMode es 'destination' o null (comportamiento por defecto)
                     destinationLocation = selectedLocation;
                     destinationInput.value = formattedAddress;
-                    if (destinationMarker) destinationMarker.setMap(null); // Limpiar anterior
+                    if (destinationMarker) destinationMarker.setMap(null);
                     destinationMarker = new google.maps.Marker({
                         position: destinationLocation,
                         map: map,
@@ -580,20 +607,20 @@
                 map.setZoom(14);
                 alarmTriggered = false; // Resetear alarma si se cambia el destino
 
-                // Recalcular ruta después de cualquier selección si ambos puntos están definidos
                 let currentRouteOrigin = startLocation || userMarker.getPosition();
                 if (currentRouteOrigin && destinationLocation) {
                     calculateAndDisplayRoute(currentRouteOrigin, destinationLocation);
                 } else {
                     updateStatus('Punto fijado. Ahora define el otro punto o espera la ubicación actual.', 'info');
                 }
-                mapSelectionMode = null; // Resetear el modo de selección del mapa
-                expandPanel(); // Expandir el panel una vez que se hizo la selección
-            } catch (error) {
+                mapSelectionMode = null;
+                expandPanel();
+            }
+            catch (error) {
                 updateStatus(`Error al seleccionar punto en el mapa: ${error}. Por favor, intenta de nuevo.`, 'error');
                 console.error(error);
-                mapSelectionMode = null; // Resetear el modo de selección del mapa
-                expandPanel(); // Expandir el panel incluso si hay un error
+                mapSelectionMode = null;
+                expandPanel();
             }
         }
 
@@ -621,10 +648,9 @@
                 if (startAddress) {
                     const startResult = await geocodeLocation(startAddress);
                     routeOriginLatLng = startResult.geometry.location;
-                    startLocation = routeOriginLatLng; // Actualizar la variable startLocation
+                    startLocation = routeOriginLatLng;
 
-                    if (originMarker) originMarker.setMap(null); // Limpiar marcador anterior
-                    // Mostrar marcador de origen si es diferente de la ubicación actual
+                    if (originMarker) originMarker.setMap(null);
                     if (userMarker.getPosition() && !userMarker.getPosition().equals(routeOriginLatLng)) {
                         originMarker = new google.maps.Marker({
                             position: routeOriginLatLng,
@@ -632,8 +658,7 @@
                             title: 'Punto de Partida',
                             icon: { url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png' }
                         });
-                        userMarker.setMap(map); // Asegurar que el marcador de usuario sea visible
-                    } else if (!userMarker.getPosition() && routeOriginLatLng) { // Si no hay user marker, siempre mostrar el custom origin
+                    } else if (!userMarker.getPosition() && routeOriginLatLng) {
                          originMarker = new google.maps.Marker({
                             position: routeOriginLatLng,
                             map: map,
@@ -643,16 +668,18 @@
                     }
                 } else {
                     routeOriginLatLng = userMarker.getPosition();
-                    startLocation = routeOriginLatLng; // Actualizar la variable startLocation
-                    if (originMarker) originMarker.setMap(null); // Ocultar marcador de origen si se vuelve a usar la ubicación actual
+                    startLocation = routeOriginLatLng;
+                    if (originMarker) originMarker.setMap(null);
                 }
                 
                 const destinationResult = await geocodeLocation(destAddress);
                 destinationLocation = destinationResult.geometry.location;
                 alarmDistanceKm = distance;
-                alarmTriggered = false; // Reseteamos la alarma
+                alarmTriggered = false;
 
-                directionsRenderer.setDirections({ routes: [] }); // Limpiar cualquier ruta anterior
+                directionsRenderer.setDirections({ routes: [] });
+                userTrajectoryPolyline.setPath([]); // Limpiar trayecto al establecer nueva alarma
+                userPathCoords = [];
 
                 if (destinationMarker) {
                     destinationMarker.setPosition(destinationLocation);
@@ -691,20 +718,14 @@
 
             const userLatLng = new google.maps.LatLng(userPos.lat, userPos.lng);
             
-            // Usamos la librería de geometría esférica para un cálculo preciso
             const distanceInMeters = google.maps.geometry.spherical.computeDistanceBetween(userLatLng, destinationLocation);
             const distanceInKm = distanceInMeters / 1000;
 
             updateStatus(`Distancia al destino: ${distanceInKm.toFixed(2)} km.`);
 
-            // Comprobamos si hay que disparar la alarma
             if (distanceInKm <= alarmDistanceKm) {
                 triggerAlarm();
                 alarmTriggered = true;
-                // Si quieres que la alarma siga sonando hasta que el usuario la desactive manualmente, no hagas null el destino.
-                // Si quieres que solo suene una vez y luego se "desarme", podrías hacer:
-                // destinationLocation = null;
-                // if(destinationMarker) destinationMarker.setMap(null);
             }
         }
 
@@ -718,10 +739,10 @@
             statusPanel.classList.remove('hidden');
             
             if (type === 'error') {
-                statusPanel.style.backgroundColor = '#DC2626'; // Rojo para errores
-                routeDistanceText.textContent = ''; // Limpiar distancia de ruta en caso de error
+                statusPanel.style.backgroundColor = '#DC2626';
+                routeDistanceText.textContent = '';
             } else {
-                statusPanel.style.backgroundColor = 'rgba(30, 41, 59, 0.9)'; // Azul oscuro para información normal
+                statusPanel.style.backgroundColor = 'rgba(30, 41, 59, 0.9)';
             }
             statusText.textContent = text;
         }
@@ -743,14 +764,12 @@
          */
         function triggerAlarm() {
             updateStatus(`¡ALERTA! Estás a menos de ${alarmDistanceKm} km de tu destino.`, 'info');
-            statusPanel.style.backgroundColor = '#16A34A'; // Verde para la alerta
+            statusPanel.style.backgroundColor = '#16A34A';
 
-            // Asegurarse de que el contexto de audio se inicie por una interacción del usuario
             if (alarmSynth && Tone.context.state !== 'running') {
                 Tone.start();
             }
             
-            // Reproducir una secuencia de notas para la alarma
             if (alarmSynth) {
                 const now = Tone.now();
                 alarmSynth.triggerAttackRelease("C5", "8n", now);
@@ -758,15 +777,9 @@
                 alarmSynth.triggerAttackRelease("C5", "8n", now + 0.4);
             }
 
-            // También podemos hacer vibrar el dispositivo si es compatible
             if (window.navigator && window.navigator.vibrate) {
-                navigator.vibrate([500, 200, 500]); // Vibra 500ms, pausa 200ms, vibra 500ms
+                navigator.vibrate([500, 200, 500]);
             }
-
-            // Opcional: limpiar el marcador de destino después de la alarma
-            // setTimeout(() => {
-            //     if(destinationMarker) destinationMarker.setMap(null);
-            // }, 10000); // 10 segundos después
         }
 
         // Exportar initMap al ámbito global para que la API de Google Maps pueda llamarla
@@ -780,4 +793,3 @@
     </script>
 </body>
 </html>
-
